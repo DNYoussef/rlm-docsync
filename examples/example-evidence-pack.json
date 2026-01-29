@@ -1,0 +1,49 @@
+{
+  "manifest_hash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+  "runner": "rlm-docsync",
+  "runner_version": "0.1.0",
+  "timestamp": "2026-01-29T00:00:00+00:00",
+  "results": [
+    {
+      "claim_id": "ARCH-001",
+      "claim_text": "All API endpoints require authentication",
+      "status": "pass",
+      "evidence": [
+        {
+          "source_type": "code",
+          "path": "src/api/routes.py",
+          "line": 14,
+          "snippet": "@requires_auth",
+          "matched": true
+        },
+        {
+          "source_type": "code",
+          "path": "src/api/admin.py",
+          "line": 8,
+          "snippet": "@requires_auth",
+          "matched": true
+        }
+      ],
+      "message": "2/2 evidence found"
+    },
+    {
+      "claim_id": "ARCH-002",
+      "claim_text": "Database migrations use Alembic",
+      "status": "fail",
+      "evidence": [
+        {
+          "source_type": "code",
+          "path": "src/db/migrate.py",
+          "line": 0,
+          "snippet": "",
+          "matched": false
+        }
+      ],
+      "message": "no matching evidence found"
+    }
+  ],
+  "hash_chain": [
+    "example-hash-link-0",
+    "example-hash-link-1"
+  ]
+}

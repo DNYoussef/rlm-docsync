@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "docs": [
+    {
+      "path": "docs/architecture.md",
+      "mode": "spec-first",
+      "claims": [
+        {
+          "id": "ARCH-001",
+          "text": "All API endpoints require authentication",
+          "evidence": [
+            {
+              "type": "code",
+              "pattern": "@requires_auth",
+              "scope": "src/api/"
+            }
+          ]
+        },
+        {
+          "id": "ARCH-002",
+          "text": "Database migrations use Alembic",
+          "evidence": [
+            {
+              "type": "code",
+              "pattern": "from alembic",
+              "scope": "src/"
+            },
+            {
+              "type": "markdown",
+              "pattern": "alembic",
+              "scope": "docs/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "docs/security.md",
+      "mode": "reality-first",
+      "claims": [
+        {
+          "id": "SEC-001",
+          "text": "Secrets are loaded from environment variables only",
+          "evidence": [
+            {
+              "type": "code",
+              "pattern": "os\\.environ",
+              "scope": "src/"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
