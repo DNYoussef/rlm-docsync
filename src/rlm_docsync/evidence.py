@@ -28,7 +28,10 @@ class DocEvidencePack:
     runner: str = "rlm-docsync"
     runner_version: str = "0.1.0"
     timestamp: str = ""
+    #: Ordered list of :class:`ClaimResult` objects produced by the run.
+    #: Each entry corresponds to one claim evaluated against source evidence.
     results: list[ClaimResult] = field(default_factory=list)
+    #: SHA-256 hash chain over ``results``; built by :meth:`build_hash_chain`.
     hash_chain: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:

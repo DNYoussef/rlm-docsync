@@ -1,4 +1,9 @@
-"""Code adapter: AST + grep for evidence in source files."""
+"""Code adapter: AST + grep for evidence in source files.
+
+Side effects:
+    Reads files from the filesystem under the configured ``repo_root``.
+    All I/O is read-only; no files are modified.
+"""
 
 from __future__ import annotations
 
@@ -8,8 +13,10 @@ from pathlib import Path
 
 from ..claims import EvidenceRef
 
-
 _CODE_EXTENSIONS = {".py", ".js", ".ts", ".go", ".rs", ".java", ".c", ".h", ".cpp"}
+
+#: Reject regex patterns longer than this to mitigate ReDoS.
+_MAX_PATTERN_LEN = 1000
 
 
 class CodeAdapter:
@@ -30,6 +37,8 @@ class CodeAdapter:
             return []
 
         refs: list[EvidenceRef] = []
+        if len(pattern) > _MAX_PATTERN_LEN:
+            pattern = re.escape(pattern[:_MAX_PATTERN_LEN])
         try:
             compiled = re.compile(pattern)
         except re.error:
@@ -60,7 +69,7 @@ class CodeAdapter:
         return refs
 
     def _iter_code_files(self, root: Path):
-        """Yield code files under root."""
+        """Yield code files under *root* (filesystem read, no writes)."""
         if root.is_file():
             if root.suffix in _CODE_EXTENSIONS:
                 yield root

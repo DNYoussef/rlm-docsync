@@ -1,4 +1,9 @@
-"""Markdown adapter: search documentation files for evidence."""
+"""Markdown adapter: search documentation files for evidence.
+
+Side effects:
+    Reads files from the filesystem under the configured ``repo_root``.
+    All I/O is read-only; no files are modified.
+"""
 
 from __future__ import annotations
 
@@ -7,8 +12,10 @@ from pathlib import Path
 
 from ..claims import EvidenceRef
 
-
 _MD_EXTENSIONS = {".md", ".markdown", ".rst", ".txt"}
+
+#: Reject regex patterns longer than this to mitigate ReDoS.
+_MAX_PATTERN_LEN = 1000
 
 
 class MarkdownAdapter:
@@ -24,6 +31,8 @@ class MarkdownAdapter:
             return []
 
         refs: list[EvidenceRef] = []
+        if len(pattern) > _MAX_PATTERN_LEN:
+            pattern = re.escape(pattern[:_MAX_PATTERN_LEN])
         try:
             compiled = re.compile(pattern)
         except re.error:
@@ -51,7 +60,7 @@ class MarkdownAdapter:
         return refs
 
     def _iter_md_files(self, root: Path):
-        """Yield markdown files under root."""
+        """Yield markdown files under *root* (filesystem read, no writes)."""
         if root.is_file():
             if root.suffix in _MD_EXTENSIONS:
                 yield root
