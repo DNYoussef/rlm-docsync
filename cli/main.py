@@ -32,15 +32,23 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     raw_text = manifest_path.read_text(encoding="utf-8")
 
-    # Support both JSON and YAML-parsed-externally (JSON only built-in)
+    # Support JSON first, then YAML if PyYAML is available.
     try:
         data = json.loads(raw_text)
     except json.JSONDecodeError:
-        print(
-            "ERROR: manifest must be JSON (for YAML, convert externally)",
-            file=sys.stderr,
-        )
-        return 1
+        try:
+            import yaml  # type: ignore
+
+            parsed = yaml.safe_load(raw_text)
+            if not isinstance(parsed, dict):
+                raise ValueError("manifest root must be an object")
+            data = parsed
+        except Exception:
+            print(
+                "ERROR: manifest must be valid JSON or YAML",
+                file=sys.stderr,
+            )
+            return 1
 
     manifest = load_manifest_from_dict(data)
     errors = validate_manifest(manifest)
