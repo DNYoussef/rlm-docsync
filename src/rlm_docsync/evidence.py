@@ -26,15 +26,17 @@ class DocEvidencePack:
 
     manifest_hash: str  # SHA-256 of the manifest file content
     runner: str = "rlm-docsync"
-    runner_version: str = "0.1.0"
+    runner_version: str = "0.1.1"
     timestamp: str = ""
     #: Ordered list of :class:`ClaimResult` objects produced by the run.
     #: Each entry corresponds to one claim evaluated against source evidence.
     results: list[ClaimResult] = field(default_factory=list)
     #: Legacy chain view (list of chain_hash values), kept for compatibility.
     hash_chain: list[str] = field(default_factory=list)
-    #: Canonical v0.2.0 immutability proof.
+    #: Canonical v0.2.x immutability proof.
     immutability_proof: dict[str, Any] = field(default_factory=dict)
+    #: Optional sanitization attestation summary.
+    sanitization: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.timestamp:
@@ -48,7 +50,7 @@ class DocEvidencePack:
     # ------------------------------------------------------------------
 
     def build_hash_chain(self) -> list[str]:
-        """Build canonical v0.2.0 proof and update legacy hash_chain view."""
+        """Build canonical v0.2.x proof and update legacy hash_chain view."""
         links: list[dict[str, Any]] = []
         previous_hash = "genesis"
 
@@ -97,7 +99,7 @@ class DocEvidencePack:
                 "content_hash": _sha256(content_json),
             })
         payload: dict[str, Any] = {
-            "version": "0.2.0",
+            "version": "0.2.1" if self.sanitization else "0.2.0",
             "manifest_hash": self.manifest_hash,
             "runner": self.runner,
             "runner_version": self.runner_version,
@@ -107,6 +109,8 @@ class DocEvidencePack:
             "results": [r.to_dict() for r in self.results],
             "hash_chain": self.hash_chain,
         }
+        if self.sanitization:
+            payload["sanitization"] = self.sanitization
         return json.dumps(payload, indent=indent, sort_keys=False)
 
     @classmethod
@@ -115,7 +119,7 @@ class DocEvidencePack:
         if data.get("results"):
             results = [ClaimResult.from_dict(r) for r in data.get("results", [])]
         else:
-            # v0.2.0 payload may only contain items; reconstruct results from item content.
+            # v0.2.x payload may only contain items; reconstruct results from item content.
             results = []
             for item in data.get("items", []):
                 content = item.get("content", {})
@@ -124,11 +128,12 @@ class DocEvidencePack:
         pack = cls(
             manifest_hash=data["manifest_hash"],
             runner=data.get("runner", "rlm-docsync"),
-            runner_version=data.get("runner_version", "0.1.0"),
+            runner_version=data.get("runner_version", "0.1.1"),
             timestamp=data.get("timestamp", ""),
             results=results,
             hash_chain=data.get("hash_chain", []),
             immutability_proof=data.get("immutability_proof", {}),
+            sanitization=data.get("sanitization"),
         )
         if not pack.hash_chain and pack.immutability_proof.get("hash_chain"):
             pack.hash_chain = [

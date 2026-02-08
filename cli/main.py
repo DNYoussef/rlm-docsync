@@ -22,6 +22,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from src.rlm_docsync.manifest import load_manifest_from_dict, validate_manifest
 from src.rlm_docsync.runner import NightlyRunner
 from src.rlm_docsync.evidence import DocEvidencePack
+from src.rlm_docsync.sanitization import PIIShieldSanitizer
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -59,8 +60,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     repo_root = args.repo or str(Path.cwd())
-    runner = NightlyRunner(repo_root=repo_root, manifest_text=raw_text)
-    packs = runner.run(manifest)
+
+    sanitizer = None
+    pii_shield_enabled = bool(args.pii_shield_enabled or args.pii_shield_endpoint)
+    if pii_shield_enabled:
+        sanitizer = PIIShieldSanitizer(
+            endpoint=args.pii_shield_endpoint or "",
+            api_key=args.pii_shield_api_key or None,
+            timeout_seconds=float(args.pii_shield_timeout),
+            fail_closed=bool(args.pii_shield_fail_closed),
+        )
+
+    runner = NightlyRunner(
+        repo_root=repo_root,
+        manifest_text=raw_text,
+        sanitizer=sanitizer,
+        sanitization_salt_fingerprint=args.pii_shield_salt_fingerprint,
+    )
+    try:
+        packs = runner.run(manifest)
+    except Exception as exc:
+        print(f"ERROR: docsync run failed: {exc}", file=sys.stderr)
+        return 1
 
     output_dir = Path(args.output) if args.output else Path.cwd()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +150,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_parser.add_argument(
         "--output", default="", help="Output directory for evidence packs"
+    )
+    run_parser.add_argument(
+        "--pii-shield-enabled",
+        action="store_true",
+        help="Enable remote PII-Shield sanitization for evidence content",
+    )
+    run_parser.add_argument(
+        "--pii-shield-endpoint",
+        default="",
+        help="PII-Shield HTTP endpoint URL",
+    )
+    run_parser.add_argument(
+        "--pii-shield-api-key",
+        default="",
+        help="Optional API key for PII-Shield endpoint",
+    )
+    run_parser.add_argument(
+        "--pii-shield-timeout",
+        type=float,
+        default=5.0,
+        help="PII-Shield HTTP timeout in seconds (default: 5)",
+    )
+    run_parser.add_argument(
+        "--pii-shield-fail-closed",
+        action="store_true",
+        help="Fail run when PII-Shield is unreachable or misconfigured",
+    )
+    run_parser.add_argument(
+        "--pii-shield-salt-fingerprint",
+        default="sha256:00000000",
+        help="Non-secret salt fingerprint recorded in bundle sanitization summary",
     )
 
     # -- verify --
