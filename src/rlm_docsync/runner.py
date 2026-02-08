@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Protocol
@@ -18,6 +19,7 @@ from .adapters.markdown import MarkdownAdapter
 from .claims import ClaimResult, ClaimStatus, EvidenceRef
 from .evidence import DocEvidencePack
 from .manifest import DocManifest, ClaimEntry, EvidenceSpec
+from .sanitization import _sha256_text
 
 _ALLOWED_SANITIZATION_METHODS = {
     "deterministic_hmac",
@@ -122,7 +124,8 @@ class NightlyRunner(DocSyncRunner):
                     "include_findings": input_format in {"json", "diff"},
                 },
             )
-        except Exception:
+        except Exception as exc:
+            print(f"WARNING: PII sanitizer call failed ({type(exc).__name__}: {exc}), using unsanitized text", file=sys.stderr)
             if bool(getattr(self._sanitizer, "fail_closed", False)):
                 raise
             normalized = _normalize_sanitizer_result(
@@ -191,7 +194,8 @@ class NightlyRunner(DocSyncRunner):
                 )
             sanitized_results = [ClaimResult.from_dict(item) for item in parsed]
             return sanitized_results, summary
-        except Exception:
+        except Exception as exc:
+            print(f"WARNING: PII sanitizer returned invalid response, falling back to unsanitized data: {type(exc).__name__}", file=sys.stderr)
             summary["status"] = "partial"
             return results, summary
 
@@ -205,6 +209,17 @@ class NightlyRunner(DocSyncRunner):
             for claim in doc.claims:
                 result = self._inspect_claim(claim)
                 results.append(result)
+
+            # H5: sanitize individual claim_text and message fields
+            if self._sanitizer:
+                for result in results:
+                    if result.claim_text:
+                        sanitized_ct, _ = self._sanitize_text(result.claim_text, purpose="claim_text")
+                        result.claim_text = sanitized_ct
+                    if result.message:
+                        sanitized_msg, _ = self._sanitize_text(result.message, purpose="claim_message")
+                        result.message = sanitized_msg
+
             sanitized_results, sanitization = self._sanitize_results(results)
 
             pack = DocEvidencePack(
@@ -218,17 +233,14 @@ class NightlyRunner(DocSyncRunner):
         return packs
 
 
-def _sha256_text(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def _merge_count_map(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, int]:
     merged: dict[str, int] = {}
     for source in (base or {}, extra or {}):
         for key, value in source.items():
             try:
                 numeric = int(value)
-            except Exception:
+            except Exception as exc:
+                print(f"WARNING: non-numeric count for key '{key}': {type(exc).__name__}", file=sys.stderr)
                 numeric = 0
             merged[str(key)] = merged.get(str(key), 0) + max(numeric, 0)
     return merged
@@ -275,19 +287,20 @@ def _normalize_sanitizer_result(text: str, raw_result: Any) -> dict[str, Any]:
             "output_hash": getattr(raw_result, "output_hash", None),
         }
 
-    sanitized_text = (
-        data.get("sanitized_text")
-        or data.get("sanitizedText")
-        or data.get("output")
-        or text
-    )
+    sanitized_text = text  # fallback to original
+    for key in ("sanitized_text", "sanitizedText", "output"):
+        val = data.get(key)
+        if val is not None:
+            sanitized_text = val
+            break
     sanitized_text = str(sanitized_text)
     changed = bool(data.get("changed", sanitized_text != text))
 
     redaction_count = data.get("redaction_count", data.get("redactionCount", 0))
     try:
         redaction_count = max(int(redaction_count), 0)
-    except Exception:
+    except Exception as exc:
+        print(f"WARNING: non-numeric redaction_count '{redaction_count}': {type(exc).__name__}", file=sys.stderr)
         redaction_count = 0
 
     redactions_by_type = data.get(

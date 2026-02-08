@@ -55,5 +55,36 @@ class TestPIIShieldSanitizer(unittest.TestCase):
         self.assertTrue(result["changed"])
 
 
+    def test_empty_string_sanitized_text_not_bypassed(self):
+        """C5: empty string from PII-Shield must NOT fall through to original."""
+        sanitizer = PIIShieldSanitizer(endpoint="https://example.test/sanitize")
+        fake_body = {
+            "sanitized_text": "",
+            "changed": True,
+            "redaction_count": 1,
+            "redactions_by_type": {"email": 1},
+        }
+        with patch("src.rlm_docsync.sanitization.urllib_request.urlopen", return_value=_FakeResponse(fake_body)):
+            result = sanitizer.sanitize_text("user@example.com", {"input_format": "text"})
+
+        self.assertEqual(result["sanitized_text"], "")
+        self.assertTrue(result["changed"])
+
+    def test_none_sanitized_text_falls_to_redacted_text(self):
+        """C5: None sanitized_text should fall through to redacted_text."""
+        sanitizer = PIIShieldSanitizer(endpoint="https://example.test/sanitize")
+        fake_body = {
+            "sanitized_text": None,
+            "redacted_text": "safe",
+            "changed": True,
+            "redaction_count": 1,
+        }
+        with patch("src.rlm_docsync.sanitization.urllib_request.urlopen", return_value=_FakeResponse(fake_body)):
+            result = sanitizer.sanitize_text("dangerous PII here", {"input_format": "text"})
+
+        self.assertEqual(result["sanitized_text"], "safe")
+        self.assertTrue(result["changed"])
+
+
 if __name__ == "__main__":
     unittest.main()

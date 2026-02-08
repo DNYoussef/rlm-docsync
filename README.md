@@ -69,6 +69,36 @@ Each run produces a JSON evidence pack containing:
 Use `docsync verify --pack <file>` to validate the hash chain
 independently.
 
+## PII-Shield Integration
+
+rlm-docsync integrates [PII-Shield](https://github.com/aragossa/pii-shield) to sanitize claim text and evidence content before sealing evidence packs.
+
+### Why
+
+Documentation claims may reference real system credentials, internal hostnames, API keys, or PII from examples. When these claims are packaged into evidence packs and shared with auditors or stored long-term, unsanitized secrets become a data exposure risk. PII-Shield uses Shannon entropy analysis to detect high-entropy secrets and replaces them with deterministic HMAC tokens.
+
+### Where
+
+Sanitization runs in `src/rlm_docsync/sanitization.py` and is applied to claim text and evidence messages in `src/rlm_docsync/runner.py` before the evidence pack hash chain is computed.
+
+### How
+
+```bash
+docsync run --manifest guardspine.docs.yaml \
+  --pii-shield-enabled \
+  --pii-shield-endpoint https://pii-shield.example/sanitize \
+  --pii-shield-salt-fingerprint sha256:your-org-fingerprint
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--pii-shield-enabled` | `false` | Enable PII-Shield sanitization |
+| `--pii-shield-endpoint` | `$PII_SHIELD_API_KEY` env var | Remote API URL |
+| `--pii-shield-salt-fingerprint` | `sha256:00000000` | HMAC salt fingerprint |
+| `--pii-shield-fail-closed` | `true` | Exit on sanitization error |
+
+When enabled, evidence packs include a `sanitization` attestation block (v0.2.1 format) documenting the engine, method, and redaction count.
+
 ## Scope
 
 rlm-docsync does NOT include compression, decision queues,

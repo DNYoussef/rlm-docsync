@@ -7,17 +7,13 @@ or reordered after the run completed.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from .claims import ClaimResult
-
-
-def _sha256(text: str) -> str:
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+from .sanitization import _sha256_text as _sha256
 
 
 @dataclass

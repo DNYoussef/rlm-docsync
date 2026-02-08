@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -163,8 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_parser.add_argument(
         "--pii-shield-api-key",
-        default="",
-        help="Optional API key for PII-Shield endpoint",
+        default=os.environ.get("PII_SHIELD_API_KEY", ""),
+        help="Optional API key for PII-Shield endpoint (default: $PII_SHIELD_API_KEY)",
     )
     run_parser.add_argument(
         "--pii-shield-timeout",
@@ -174,8 +175,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_parser.add_argument(
         "--pii-shield-fail-closed",
-        action="store_true",
-        help="Fail run when PII-Shield is unreachable or misconfigured",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Fail run when PII-Shield is unreachable or misconfigured (default: True)",
     )
     run_parser.add_argument(
         "--pii-shield-salt-fingerprint",

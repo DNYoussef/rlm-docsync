@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from typing import Any
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -17,9 +18,11 @@ class PIIShieldSanitizer:
         endpoint: str,
         api_key: str | None = None,
         timeout_seconds: float = 5.0,
-        fail_closed: bool = False,
+        fail_closed: bool = True,
     ) -> None:
         self.endpoint = endpoint.strip()
+        if self.endpoint:
+            _validate_endpoint_url(self.endpoint)
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
         self.fail_closed = fail_closed
@@ -65,13 +68,12 @@ class PIIShieldSanitizer:
                 raise RuntimeError("PII-Shield response must be a JSON object")
             return self._passthrough_result(text, status="error")
 
-        sanitized_text = (
-            body.get("sanitized_text")
-            or body.get("redacted_text")
-            or body.get("text")
-            or body.get("output")
-            or text
-        )
+        sanitized_text = text  # fallback to original
+        for key in ("sanitized_text", "redacted_text", "text", "output"):
+            val = body.get(key)
+            if val is not None:
+                sanitized_text = val
+                break
         sanitized_text = str(sanitized_text)
 
         changed = bool(body.get("changed", sanitized_text != text))
@@ -122,6 +124,24 @@ def _sha256_text(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _validate_endpoint_url(url: str) -> None:
+    """Basic scheme check for PII-Shield endpoint URL.
+
+    Rejects non-HTTP(S) schemes and warns on plain HTTP.
+    """
+    lower = url.lower()
+    if not (lower.startswith("https://") or lower.startswith("http://")):
+        raise ValueError(
+            f"PII-Shield endpoint must use http:// or https:// scheme, got: {url!r}"
+        )
+    if lower.startswith("http://"):
+        print(
+            f"WARNING: PII-Shield endpoint uses plain HTTP ({url}); "
+            "prefer HTTPS to protect PII in transit",
+            file=sys.stderr,
+        )
+
+
 def _extract_redactions_by_type(body: dict[str, Any]) -> dict[str, int]:
     raw = body.get("redactions_by_type")
     if isinstance(raw, dict):
@@ -129,7 +149,8 @@ def _extract_redactions_by_type(body: dict[str, Any]) -> dict[str, int]:
         for key, value in raw.items():
             try:
                 clean[str(key)] = max(int(value), 0)
-            except Exception:
+            except Exception as exc:
+                print(f"WARNING: non-numeric redaction count for type '{key}': {type(exc).__name__}", file=sys.stderr)
                 continue
         return clean
 
