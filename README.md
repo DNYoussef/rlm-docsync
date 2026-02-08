@@ -32,6 +32,12 @@ docsync run --manifest guardspine.docs.yaml
 
 # Verify an evidence pack
 docsync verify --pack evidence-pack.json
+
+# Optional: sanitize claims before bundle sealing
+docsync run --manifest guardspine.docs.yaml \
+  --pii-shield-enabled \
+  --pii-shield-endpoint https://pii-shield.example/sanitize \
+  --pii-shield-salt-fingerprint sha256:deadbeef
 ```
 
 ## Manifest Format
@@ -58,6 +64,7 @@ Each run produces a JSON evidence pack containing:
 - Per-claim results (pass, fail, skip) with evidence references
 - SHA-256 hash chain linking every entry to its predecessor
 - Timestamp and runner metadata
+- Optional `sanitization` attestation block (GuardSpine v0.2.1 format)
 
 Use `docsync verify --pack <file>` to validate the hash chain
 independently.

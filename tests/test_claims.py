@@ -1,5 +1,6 @@
 """Tests for claims schema and evidence pack."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -97,6 +98,27 @@ class TestDocEvidencePack(unittest.TestCase):
         ok, msg = restored.verify()
         self.assertTrue(ok)
         self.assertEqual(len(restored.results), 2)
+
+    def test_json_roundtrip_with_sanitization(self):
+        pack = self._make_pack()
+        pack.sanitization = {
+            "engine_name": "pii-shield",
+            "engine_version": "1.1.0",
+            "method": "provider_native",
+            "token_format": "[HIDDEN:<id>]",
+            "salt_fingerprint": "sha256:deadbeef",
+            "redaction_count": 1,
+            "redactions_by_type": {"api_key": 1},
+            "status": "sanitized",
+            "applied_to": ["docsync_pack"],
+        }
+        raw = json.loads(pack.to_json())
+        self.assertEqual(raw["version"], "0.2.1")
+
+        restored = DocEvidencePack.from_json(json.dumps(raw))
+        self.assertEqual(restored.sanitization["engine_name"], "pii-shield")
+        ok, msg = restored.verify()
+        self.assertTrue(ok)
 
     def test_empty_pack(self):
         pack = DocEvidencePack(manifest_hash="empty")
